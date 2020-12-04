@@ -1,13 +1,18 @@
 package godebug
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
 )
 
+var defaultConfig Session
+var config = defaultConfig
+
 func init() {
-	log.Println("init in debug.go")
+	defaultConfig.Start("anansi", true, false, DEBUG)
+	LogPrintln("init in debug.go")
 }
 
 // VerboseLevel constants describe the level of output and logging.
@@ -55,34 +60,49 @@ const (
 // Session defines session information for DEV or PRODUCTION modes
 type Session struct {
 	Name         string
-	IsDevMode    devMode // DEV or PRODUCTION
-	UseLogger    bool    // use Log?
+	IsDevMode    devMode
+	UseLogger    bool
 	Verbose      VerboseLevel
 	sessionStart time.Time
 	sessionEnd   time.Time
 	userID       int
+	active       bool
 }
 
-func (s *Session) init(name string, mode devMode, useLogger bool, verbose VerboseLevel) {
+// Start starts a new session with output and logging specified.
+func (s *Session) Start(name string, mode devMode, useLogger bool, verbose VerboseLevel) {
 	s.Name = name
 	s.IsDevMode = mode
 	s.UseLogger = useLogger
 	s.Verbose = verbose
 	s.sessionStart = time.Now()
 	s.userID = os.Getuid()
+	s.active = true
 }
 
-func logPrint(v ...interface{}) {
-	if config.Verbose >= verboseDebug {
+// Stop stops the session.
+func (s *Session) Stop() {
+	s.sessionEnd = time.Now()
+	s.active = false
+}
+
+// LogPrintln respects the VerboseLevel setting in the session configuration
+func LogPrintln(v ...interface{}) {
+	if config.Verbose <= DEBUG {
 		log.Println("----------")
 		defer log.Println("----------")
 		log.Println(v...)
 	}
 }
 
-var defaultConfig Session
-var defaultValues Session
-
-func init() {
-	defaultConfig.init("anansi", true, false, verboseAll)
+// Println prints while respecting session configuration
+func Println(v ...interface{}) error {
+	if !config.active {
+		return fmt.Errorf("cannot print when debug session is not active")
+	}
+	if config.UseLogger {
+		log.Println(v...)
+	}
+	fmt.Println(v...)
+	return nil
 }

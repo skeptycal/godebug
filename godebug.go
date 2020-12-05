@@ -9,16 +9,14 @@ import (
 var (
 	defaultConfig Session
 	config        Session
-
-	// LogFormatter - configures the log formatter
-	LogFormatter = new(log.TextFormatter)
 )
 
 // init initializes the session
 func init() {
+	defaultConfig.Start("anansi", true, false, DEBUG, LogDEBUG)
+
 	if !config.isActive() {
 		config = defaultConfig
-		defaultConfig.Start("anansi", true, false, DEBUG, LogDEBUG)
 	}
 	if config.IsLogger() {
 		LogFormatter := new(log.TextFormatter)
@@ -79,15 +77,6 @@ const (
 	// CRITICAL - Output only Panic errors
 	LogCRITICAL LogLevel = 50
 )
-
-// LogPrintln respects the VerboseLevel setting in the session configuration
-// func LogPrintln(v ...interface{}) {
-// 	if config.Verbose <= DEBUG {
-// 		log.Println("----------")
-// 		defer log.Println("----------")
-// 		log.Println(v...)
-// 	}
-// }
 
 // Println prints while respecting session configuration
 func Println(v ...interface{}) error {

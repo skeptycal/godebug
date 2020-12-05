@@ -1,4 +1,4 @@
-package godebug
+package gologLevel
 
 import (
 	"fmt"
@@ -9,48 +9,100 @@ import (
 )
 
 var (
-	defaultConfig *Session
-	config        *Session
+	defaultConfig Session
+	config        Session
 
 	// LogFormatter - configures the log formatter
 	LogFormatter = new(log.TextFormatter)
 )
 
-// Session defines session information for DEV or PRODUCTION modes
-type Session struct {
-	Name         string
-	IsDevMode    devMode
-	UseLogger    bool
-	Verbose      VerboseLevel
+// session defines session information for DEV or PRODUCTION modes
+// private fields are automatically initialized and managed
+type session struct {
+	name         string
+	isDevMode    bool
+	isLogger     bool
+	verbose      VerboseLevel
+	logLevel     LogLevel
 	sessionStart time.Time
 	sessionEnd   time.Time
 	userID       int
 	active       bool
 }
 
+type Session interface {
+	Start(name string, devMode bool, useLogger bool, verbose VerboseLevel, logLevel LogLevel)
+	Stop()
+	Name() string
+	IsDevMode() bool
+	IsLogger() bool
+	Verbose() VerboseLevel
+	SetLogLevel() LogLevel
+	SetVerbose(verbose VerboseLevel)
+	SetDebugLevel(logLevel LogLevel)
+
+	// private methods are managed by the gologLevel package
+	isActive() bool
+	whoami() int
+}
+
 // Start starts a new session with output and logging specified.
-func (s *Session) Start(name string, mode devMode, useLogger bool, verbose VerboseLevel) {
-	s.Name = name
-	s.IsDevMode = mode
-	s.UseLogger = useLogger
-	s.Verbose = verbose
+func (s session) Start(name string, devMode bool, useLogger bool, verbose VerboseLevel, logLevel LogLevel) {
+	s.name = name
+	s.isDevMode = devMode
+	s.isLogger = useLogger
+	s.verbose = verbose
+	s.logLevel = logLevel
 	s.sessionStart = time.Now()
 	s.userID = os.Getuid()
 	s.active = true
 }
 
 // Stop stops the session.
-func (s *Session) Stop() {
+func (s *session) Stop() {
 	s.sessionEnd = time.Now()
 	s.active = false
 }
 
+func (s *session) Name() string {
+	return s.name
+}
+
+// IsLogger returns true if the session is using a logger.
+func (s *session) IsLogger() bool {
+	return s.isLogger
+}
+
+// IsDevMode returns true if the session is in DEV mode.
+func (s *session) IsDevMode() bool {
+	return s.isDevMode
+}
+
+func (s *session) Verbose() VerboseLevel {
+	return s.verbose
+}
+
+func (s *session) SetVerbose(verbose VerboseLevel) {
+	s.verbose = verbose
+}
+
+// whoami returns the userID of the session.
+func (s *session) whoami() int {
+	return s.userID
+}
+
+// isActive returns true if the session is active.
+func (s *session) isActive() bool {
+	return s.active
+}
+
+// init initializes the session
 func init() {
-	if !config.active {
+	if !config.isActive() {
 		config = defaultConfig
-		defaultConfig.Start("anansi", true, false, DEBUG)
+		defaultConfig.Start("anansi", true, false, DEBUG, LogDEBUG)
 	}
-	if config.UseLogger {
+	if config.IsLogger() {
 		LogFormatter.TimestampFormat = "02-01-2006 15:04:05"
 		LogFormatter.FullTimestamp = true
 		log.SetFormatter(LogFormatter)
@@ -76,7 +128,7 @@ func init() {
         CRITICAL VerboseLevel = 50
 
    e.g.
-        DEBUG will output all debug info, successes, warnings, errors
+        DEBUG will output all logLevel info, successes, warnings, errors
         ERROR will output only error info
         SUCCESS will output only success info and above (warnings,etc.)
 */
@@ -85,7 +137,7 @@ type VerboseLevel int8
 const (
 	// TRACE - Output every dam thing
 	TRACE VerboseLevel = 5
-	// DEBUG - Output all including debug info
+	// DEBUG - Output all including logLevel info
 	DEBUG VerboseLevel = 10
 	// INFO - Output standard information
 	INFO VerboseLevel = 20
@@ -99,12 +151,23 @@ const (
 	CRITICAL VerboseLevel = 50
 )
 
-type devMode bool
+type LogLevel int8
 
-// devMode returns true if the build is in dev mode
 const (
-	production  devMode = false
-	development devMode = true
+	// TRACE - Output every dam thing
+	LogTRACE LogLevel = 5
+	// DEBUG - Output all including logLevel info
+	LogDEBUG LogLevel = 10
+	// INFO - Output standard information
+	LogINFO LogLevel = 20
+	// SUCCESS - Output successful task and errors
+	LogSUCCESS LogLevel = 25
+	// WARNING - Output all nonfatal warnings and errors
+	LogWARNING LogLevel = 30
+	// ERROR - Output only Fatal errors
+	LogERROR LogLevel = 40
+	// CRITICAL - Output only Panic errors
+	LogCRITICAL LogLevel = 50
 )
 
 // LogPrintln respects the VerboseLevel setting in the session configuration
@@ -118,10 +181,10 @@ const (
 
 // Println prints while respecting session configuration
 func Println(v ...interface{}) error {
-	if !config.active {
-		return fmt.Errorf("cannot print when debug session is not active")
+	if !config.isActive() {
+		return fmt.Errorf("cannot print when logLevel session is not active")
 	}
-	if config.UseLogger {
+	if config.IsLogger() {
 		log.Info(v...)
 	}
 	fmt.Println(v...)
